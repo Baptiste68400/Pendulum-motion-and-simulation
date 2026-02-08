@@ -1,0 +1,23 @@
+# environment.py
+from dataclasses import dataclass
+import numpy as np
+
+@dataclass(frozen=True)
+class Environment:
+    planet: str = "Earth"
+
+    def gravity_mag(self) -> float:
+        """Return gravitational acceleration (m/s^2)."""
+        if self.planet == "Earth":
+            return 9.81
+        if self.planet == "Moon":
+            return 1.62
+        if self.planet == "Mars":
+            return 3.71
+        if self.planet == "Jupiter":
+            return 24.79
+        raise ValueError(f"Unknown planet: {self.planet}")
+
+    def gravity_vec(self) -> np.ndarray:
+        """2D gravity vector (x right, y up)."""
+        return np.array([0.0, -self.gravity_mag()])
