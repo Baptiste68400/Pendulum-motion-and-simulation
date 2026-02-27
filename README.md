@@ -74,7 +74,57 @@ class DP:
         x2 = x1 + self.L2 * np.sin(th2)
         y2 = y1 - self.L2 * np.cos(th2)
         return x1, y1, x2, y2
+    
+class SHO:
+    """Damped Harmonic Oscillator: m*x'' + b*x' + k*x = 0"""
 
+    def __init__(self, k, m, x0, b=0.0):
+        self.k = k
+        self.m = m
+        self.x0 = x0    # initial displacement from equilibrium (x0)
+        self.b = b       # damping coefficient (kg/s)
+
+    def get_period(self):
+        omega0 = np.sqrt(self.k / self.m)
+        gamma = self.b / (2 * self.m)
+        omega_d = np.sqrt(max(omega0**2 - gamma**2, 1e-10))
+        return 2 * np.pi / omega_d
+
+    def get_regime(self):
+        omega0 = np.sqrt(self.k / self.m)
+        gamma = self.b / (2 * self.m)
+        if np.isclose(gamma, omega0, rtol=1e-2):
+            return "critically damped"
+        elif gamma < omega0:
+            return "under-damped"
+        else:
+            return "over-damped"
+
+    def _derivs(self, state, t):
+        x, v = state
+        return [v, -(self.k / self.m) * x - (self.b / self.m) * v]
+
+    def trajectory(self, t):
+        state0 = [self.x0, 0]
+        sol = odeint(self._derivs, state0, t)
+        return sol[:, 0]
+    
+    def spring_coords(x_c, y_top, y_bottom, n_coils=14, width=0.12):
+        margin = (y_top - y_bottom) * 0.07
+        y_start = y_top  - margin
+        y_end   = y_bottom + margin
+
+        pts_y = np.linspace(y_start, y_end, n_coils * 2 + 1)
+        pts_x = np.empty_like(pts_y)
+        pts_x[0] = x_c
+        for i in range(1, len(pts_x) - 1):
+            pts_x[i] = x_c + width if i % 2 == 1 else x_c - width
+        pts_x[-1] = x_c
+
+        xs = np.concatenate([[x_c], pts_x, [x_c]])
+        ys = np.concatenate([[y_top], pts_y, [y_bottom]])
+        return xs, ys
+ 
 
 # ── Shared window helpers ────────────────────────────────────────────────────
 
