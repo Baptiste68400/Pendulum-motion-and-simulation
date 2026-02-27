@@ -38,13 +38,11 @@ class DP:
         self.m2 = m2
 
     def get_period(self):
-        # No closed-form period for DP; return small-angle approximation
-        # using the two normal-mode frequencies
         r = self.L2 / self.L1
         mu = self.m2 / (self.m1 + self.m2)
         omega_sq = (self.g / self.L1) * (1 + np.sqrt(mu * r))
         T = 2 * np.pi / np.sqrt(omega_sq)
-        return T  # approximate
+        return T
 
     def _derivs(self, state, t):
         th1, w1, th2, w2 = state
@@ -74,15 +72,16 @@ class DP:
         x2 = x1 + self.L2 * np.sin(th2)
         y2 = y1 - self.L2 * np.cos(th2)
         return x1, y1, x2, y2
-    
+
+
 class SHO:
     """Damped Harmonic Oscillator: m*x'' + b*x' + k*x = 0"""
 
     def __init__(self, k, m, x0, b=0.0):
         self.k = k
         self.m = m
-        self.x0 = x0    # initial displacement from equilibrium (x0)
-        self.b = b       # damping coefficient (kg/s)
+        self.x0 = x0
+        self.b = b
 
     def get_period(self):
         omega0 = np.sqrt(self.k / self.m)
@@ -108,11 +107,12 @@ class SHO:
         state0 = [self.x0, 0]
         sol = odeint(self._derivs, state0, t)
         return sol[:, 0]
-    
+
+    @staticmethod
     def spring_coords(x_c, y_top, y_bottom, n_coils=14, width=0.12):
         margin = (y_top - y_bottom) * 0.07
-        y_start = y_top  - margin
-        y_end   = y_bottom + margin
+        y_start = y_top - margin
+        y_end = y_bottom + margin
 
         pts_y = np.linspace(y_start, y_end, n_coils * 2 + 1)
         pts_x = np.empty_like(pts_y)
@@ -124,7 +124,7 @@ class SHO:
         xs = np.concatenate([[x_c], pts_x, [x_c]])
         ys = np.concatenate([[y_top], pts_y, [y_bottom]])
         return xs, ys
- 
+
 
 # ── Shared window helpers ────────────────────────────────────────────────────
 
@@ -153,7 +153,6 @@ def back_button(win):
 def SP_interaction():
     win = make_window("Simple Pendulum Simulation")
 
-    # --- Input frame (left side) ---
     input_frame = tk.Frame(win, bg="#212121")
     input_frame.place(x=20, y=20)
 
@@ -172,7 +171,6 @@ def SP_interaction():
                             font=("Arial", 12, "bold"))
     result_label.place(x=20, y=290)
 
-    # --- Matplotlib canvas (right side) ---
     fig, ax = plt.subplots(figsize=(5, 5), facecolor="#212121")
     ax.set_facecolor("#212121")
     ax.set_xlim(-2, 2)
@@ -325,6 +323,126 @@ def DP_interaction():
     back_button(win)
 
 
+# ── Spring (SHO) window ──────────────────────────────────────────────────────
+
+def SHO_interaction():
+    win = make_window("Spring / Harmonic Oscillator Simulation")
+
+    input_frame = tk.Frame(win, bg="#212121")
+    input_frame.place(x=20, y=20)
+
+    fields = [("k (N/m):", "10"), ("m (kg):", "1"),
+              ("x0 (m):", "1"),   ("b (kg/s):", "0")]
+    entries = []
+    for i, (lbl, default) in enumerate(fields):
+        tk.Label(input_frame, text=lbl, bg="#212121", fg="white",
+                 font=("Arial", 12)).grid(row=i, column=0, sticky="e", padx=8, pady=6)
+        e = tk.Entry(input_frame, width=10, font=("Arial", 12))
+        e.insert(0, default)
+        e.grid(row=i, column=1, padx=8, pady=6)
+        entries.append(e)
+
+    result_label = tk.Label(win, text="", bg="#212121", fg="#00FF00",
+                            font=("Arial", 12, "bold"))
+    result_label.place(x=20, y=310)
+
+    # Two subplots: left = spring animation, right = x(t) graph
+    fig, (ax_spring, ax_graph) = plt.subplots(1, 2, figsize=(9, 5),
+                                               facecolor="#212121",
+                                               gridspec_kw={"width_ratios": [1, 2]})
+    for ax in (ax_spring, ax_graph):
+        ax.set_facecolor("#212121")
+
+    # Spring animation axes
+    ax_spring.set_xlim(-0.5, 0.5)
+    ax_spring.set_ylim(-2.2, 0.2)
+    ax_spring.set_aspect("equal")
+    ax_spring.axis("off")
+
+    # Fixed ceiling marker
+    ax_spring.plot([-0.4, 0.4], [0, 0], color="white", lw=3)
+
+    spring_line, = ax_spring.plot([], [], color="#FF9800", lw=2)
+    mass_patch,  = ax_spring.plot([], [], 's', color="#5A93FF",
+                                  markersize=28, zorder=5)
+
+    # x(t) graph axes
+    ax_graph.set_xlabel("time (s)", color="white")
+    ax_graph.set_ylabel("x (m)", color="white")
+    ax_graph.tick_params(colors="white")
+    for spine in ax_graph.spines.values():
+        spine.set_edgecolor("#555555")
+    ax_graph.set_title("Displacement vs Time", color="white", fontsize=10)
+    xt_line, = ax_graph.plot([], [], color="#F472B6", lw=1.5)
+
+    canvas = FigureCanvasTkAgg(fig, master=win)
+    canvas.get_tk_widget().place(x=260, y=10, width=620, height=580)
+
+    anim_ref = [None]
+
+    def run_animation():
+        if anim_ref[0]:
+            anim_ref[0].event_source.stop()
+
+        try:
+            k  = float(entries[0].get())
+            m  = float(entries[1].get())
+            x0 = float(entries[2].get())
+            b  = float(entries[3].get())
+        except ValueError:
+            result_label.config(text="Please enter valid numbers!")
+            return
+
+        sho = SHO(k, m, x0, b)
+        T = sho.get_period()
+        regime = sho.get_regime()
+        result_label.config(text=f"Period ≈ {T:.4f} s  |  {regime}")
+
+        t_arr = np.linspace(0, 6 * T, 600)
+        xs = sho.trajectory(t_arr)
+
+        # Equilibrium position (y=0 on screen) is y = -1.0
+        # Mass hangs at y_eq - x  (positive x = stretched downward)
+        y_eq = -1.0
+        y_ceil = 0.0
+        amp = max(abs(xs)) + 0.05
+
+        ax_spring.set_ylim(y_eq - amp - 0.3, 0.2)
+
+        # x(t) graph setup
+        ax_graph.set_xlim(0, t_arr[-1])
+        ax_graph.set_ylim(-amp * 1.1, amp * 1.1)
+        ax_graph.axhline(0, color="#555555", lw=0.8, linestyle="--")
+        xt_line.set_data([], [])
+
+        def update(frame):
+            x_val = xs[frame]
+            y_mass = y_eq - x_val          # screen y of mass centre
+
+            # Spring
+            sx, sy = SHO.spring_coords(0.0, y_ceil, y_mass + 0.14,
+                                        n_coils=14, width=0.12)
+            spring_line.set_data(sx, sy)
+
+            # Mass
+            mass_patch.set_data([0], [y_mass])
+
+            # x(t) trail
+            xt_line.set_data(t_arr[:frame + 1], xs[:frame + 1])
+
+            return spring_line, mass_patch, xt_line
+
+        anim_ref[0] = animation.FuncAnimation(
+            fig, update, frames=len(t_arr), interval=20, blit=True)
+        canvas.draw()
+
+    tk.Button(win, text="Get Period & Animate", command=run_animation,
+              bg="#FF9800", fg="white", font=("Arial", 12, "bold")).place(
+        x=20, y=260, width=220, height=40)
+
+    back_button(win)
+
+
 # ── Main window ──────────────────────────────────────────────────────────────
 
 mainwindow = tk.Tk()
@@ -355,9 +473,8 @@ tk.Button(mainwindow, text="Double Pendulum Simulation", font=("Arial", 18),
           height=1, width=30, bg="#34D399", fg="white",
           command=DP_interaction).place(relx=0.5, rely=0.55, anchor="center")
 
-tk.Button(mainwindow, text="Animations", font=("Arial", 18),
-          height=1, width=30, bg="#F472B6", fg="white").place(
-    relx=0.5, rely=0.7, anchor="center")
+tk.Button(mainwindow, text="Spring Oscillator Simulation", font=("Arial", 18),
+          height=1, width=30, bg="#FF9800", fg="white",
+          command=SHO_interaction).place(relx=0.5, rely=0.7, anchor="center")
 
 mainwindow.mainloop()
-
