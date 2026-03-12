@@ -225,11 +225,21 @@ def SP_interaction():
             fig, update, frames=len(t_arr), interval=20, blit=True)
         canvas.draw()
 
-    tk.Button(win, text="Get Period & Animate", command=run_animation,
-              bg="#F472B6", fg="white", font=("Arial", 12, "bold")).place(
-        x=20, y=240, width=220, height=40)
+    btn = tk.Label(
+        win,
+        text="Get Period & Animate",
+        bg="#F472B6",
+        fg="white",
+        font=("Arial", 12, "bold"),
+        width=22,
+        height=2,
+        cursor="hand2"
+    )
+    btn.place(x=20, y=240)
 
-    back_button(win)
+    btn.bind("<Button-1>", lambda e: run_animation())
+
+    back_button(win, cleanup)
 
 
 # ── Double Pendulum window ───────────────────────────────────────────────────
@@ -316,11 +326,21 @@ def DP_interaction():
             fig, update, frames=len(t_arr), interval=20, blit=True)
         canvas.draw()
 
-    tk.Button(win, text="Get Period & Animate", command=run_animation,
-              bg="#34D399", fg="white", font=("Arial", 12, "bold")).place(
-        x=20, y=385, width=220, height=40)
+     btn = tk.Label(
+        win,
+        text="Get Period & Animate",
+        bg="#34D399",
+        fg="white",
+        font=("Arial", 12, "bold"),
+        width=22,
+        height=2,
+        cursor="hand2"
+    )
+    btn.place(x=20, y=385)
 
-    back_button(win)
+    btn.bind("<Button-1>", lambda e: run_animation())
+    back_button(win, cleanup)
+
 
 
 # ── Spring (SHO) window ──────────────────────────────────────────────────────
@@ -454,11 +474,24 @@ def SHO_interaction():
             fig, update, frames=len(t_arr), interval=20, blit=True)
         canvas_ref[0].draw()
 
-    tk.Button(win, text="Get Period & Animate", command=run_animation,
-              bg="#FF9800", fg="white", font=("Arial", 12, "bold")).place(
-        x=20, y=260, width=220, height=40)
+    btn = tk.Label(
+        win,
+        text="Get Period & Animate",
+        bg="#FF9800",
+        fg="white",
+        font=("Arial", 12, "bold"),
+        width=22,
+        height=2,
+        cursor="hand2"
+    )
+    btn.place(x=20, y=260)
 
-    back_button(win)
+    btn.bind("<Button-1>", lambda e: run_animation())
+
+    back_button(win, cleanup)
+
+
+  
 
 
 # ── Main window ──────────────────────────────────────────────────────────────
