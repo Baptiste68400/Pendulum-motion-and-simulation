@@ -249,7 +249,7 @@ def DP_interaction():
                  font=("Arial", 12)).grid(row=i, column=0, sticky="e", padx=8, pady=5)
         e = tk.Entry(input_frame, width=10, font=("Arial", 12))
         e.insert(0, default)
-        e.grid(row=i, column=1, padx=8, pady=5)
+        e.grid(row=i, column=5, padx=8, pady=5)
         entries.append(e)
 
     result_label = tk.Label(win, text="", bg="#212121", fg="#00FF00",
@@ -346,44 +346,68 @@ def SHO_interaction():
                             font=("Arial", 12, "bold"))
     result_label.place(x=20, y=310)
 
-    # Two subplots: left = spring animation, right = x(t) graph
-    fig, (ax_spring, ax_graph) = plt.subplots(1, 2, figsize=(9, 5),
-                                               facecolor="#212121",
-                                               gridspec_kw={"width_ratios": [1, 2]})
-    for ax in (ax_spring, ax_graph):
-        ax.set_facecolor("#212121")
+    # ── Canvas container: holds the matplotlib figure ──
+    # We keep a single FigureCanvasTkAgg reference in a list so run_animation
+    # can replace the whole figure (axes + artists) on every call, which is
+    # the only reliable way to avoid stale-artist / stale-animation artefacts
+    # when k, m, or b are changed between runs.
+    canvas_ref  = [None]
+    widget_ref  = [None]
+    anim_ref    = [None]
 
-    # Spring animation axes
-    ax_spring.set_xlim(-0.5, 0.5)
-    ax_spring.set_ylim(-2.2, 0.2)
-    ax_spring.set_aspect("equal")
-    ax_spring.axis("off")
+    def build_figure():
+        """Create a fresh figure with both subplots and embed it in the window.
+        Returns (fig, ax_spring, ax_graph, spring_line, mass_patch, xt_line).
+        Any previously embedded widget is destroyed first."""
 
-    # Fixed ceiling marker
-    ax_spring.plot([-0.4, 0.4], [0, 0], color="white", lw=3)
+        # Stop and discard old animation
+        if anim_ref[0] is not None:
+            anim_ref[0].event_source.stop()
+            anim_ref[0] = None
 
-    spring_line, = ax_spring.plot([], [], color="#FF9800", lw=2)
-    mass_patch,  = ax_spring.plot([], [], 's', color="#5A93FF",
-                                  markersize=28, zorder=5)
+        # Destroy old canvas widget
+        if widget_ref[0] is not None:
+            widget_ref[0].destroy()
+        if canvas_ref[0] is not None:
+            plt.close(canvas_ref[0].figure)
 
-    # x(t) graph axes
-    ax_graph.set_xlabel("time (s)", color="white")
-    ax_graph.set_ylabel("x (m)", color="white")
-    ax_graph.tick_params(colors="white")
-    for spine in ax_graph.spines.values():
-        spine.set_edgecolor("#555555")
-    ax_graph.set_title("Displacement vs Time", color="white", fontsize=10)
-    xt_line, = ax_graph.plot([], [], color="#F472B6", lw=1.5)
+        fig, (ax_sp, ax_gr) = plt.subplots(
+            1, 2, figsize=(9, 5),
+            facecolor="#212121",
+            gridspec_kw={"width_ratios": [1, 2]}
+        )
+        for ax in (ax_sp, ax_gr):
+            ax.set_facecolor("#212121")
 
-    canvas = FigureCanvasTkAgg(fig, master=win)
-    canvas.get_tk_widget().place(x=260, y=10, width=620, height=580)
+        # Spring panel
+        ax_sp.set_xlim(-0.5, 0.5)
+        ax_sp.set_ylim(-2.2, 0.2)
+        ax_sp.set_aspect("equal")
+        ax_sp.axis("off")
+        ax_sp.plot([-0.4, 0.4], [0, 0], color="white", lw=3)  # ceiling
 
-    anim_ref = [None]
+        spr_line, = ax_sp.plot([], [], color="#FF9800", lw=2)
+        mass_pt,  = ax_sp.plot([], [], 's', color="#5A93FF",
+                               markersize=28, zorder=5)
+
+        # x(t) panel
+        ax_gr.set_xlabel("time (s)", color="white")
+        ax_gr.set_ylabel("x (m)",    color="white")
+        ax_gr.tick_params(colors="white")
+        for spine in ax_gr.spines.values():
+            spine.set_edgecolor("#555555")
+        ax_gr.set_title("Displacement vs Time", color="white", fontsize=10)
+        xt_ln, = ax_gr.plot([], [], color="#F472B6", lw=1.5)
+
+        new_canvas = FigureCanvasTkAgg(fig, master=win)
+        new_canvas.get_tk_widget().place(x=260, y=10, width=620, height=580)
+
+        canvas_ref[0] = new_canvas
+        widget_ref[0] = new_canvas.get_tk_widget()
+
+        return fig, ax_sp, ax_gr, spr_line, mass_pt, xt_ln
 
     def run_animation():
-        if anim_ref[0]:
-            anim_ref[0].event_source.stop()
-
         try:
             k  = float(entries[0].get())
             m  = float(entries[1].get())
@@ -394,47 +418,41 @@ def SHO_interaction():
             return
 
         sho = SHO(k, m, x0, b)
-        T = sho.get_period()
+        T   = sho.get_period()
         regime = sho.get_regime()
         result_label.config(text=f"Period ≈ {T:.4f} s  |  {regime}")
 
         t_arr = np.linspace(0, 6 * T, 600)
-        xs = sho.trajectory(t_arr)
+        xs    = sho.trajectory(t_arr)
 
-        # Equilibrium position (y=0 on screen) is y = -1.0
-        # Mass hangs at y_eq - x  (positive x = stretched downward)
-        y_eq = -1.0
-        y_ceil = 0.0
-        amp = max(abs(xs)) + 0.05
+        # ── Rebuild figure & axes fresh for every run ──────────────────
+        fig, ax_spring, ax_graph, spring_line, mass_patch, xt_line = \
+            build_figure()
+
+        y_eq   = -1.0
+        y_ceil =  0.0
+        amp    = max(abs(xs)) + 0.05
 
         ax_spring.set_ylim(y_eq - amp - 0.3, 0.2)
 
-        # x(t) graph setup
         ax_graph.set_xlim(0, t_arr[-1])
         ax_graph.set_ylim(-amp * 1.1, amp * 1.1)
         ax_graph.axhline(0, color="#555555", lw=0.8, linestyle="--")
-        xt_line.set_data([], [])
 
         def update(frame):
-            x_val = xs[frame]
-            y_mass = y_eq - x_val          # screen y of mass centre
+            x_val  = xs[frame]
+            y_mass = y_eq - x_val
 
-            # Spring
             sx, sy = SHO.spring_coords(0.0, y_ceil, y_mass + 0.14,
-                                        n_coils=14, width=0.12)
+                                       n_coils=14, width=0.12)
             spring_line.set_data(sx, sy)
-
-            # Mass
             mass_patch.set_data([0], [y_mass])
-
-            # x(t) trail
             xt_line.set_data(t_arr[:frame + 1], xs[:frame + 1])
-
             return spring_line, mass_patch, xt_line
 
         anim_ref[0] = animation.FuncAnimation(
             fig, update, frames=len(t_arr), interval=20, blit=True)
-        canvas.draw()
+        canvas_ref[0].draw()
 
     tk.Button(win, text="Get Period & Animate", command=run_animation,
               bg="#FF9800", fg="white", font=("Arial", 12, "bold")).place(
